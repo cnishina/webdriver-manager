@@ -87,6 +87,7 @@ export class Chromium extends ProviderClass implements ProviderInterface {
    */
   async downloadVersionJson(allJson: JsonObject, majorVersion: string
       ): Promise<JsonObject> {
+    // TODO(cnishina): Do we need major version for this?
     const fileName = path.resolve(this.outDir,
       this.cacheVersionFileName.replace('.json', `-${majorVersion}.json`));
     if (!isExpired(fileName)) {

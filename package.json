@@ -3,7 +3,8 @@
   "version": "13.0.0",
   "description": "webdriver-manager",
   "bin": {
-    "webdriver-manager": "bin/webdriver-manager"
+    "webdriver-manager": "bin/webdriver-manager",
+    "wdm": "bin/wdm"
   },
   "main": "dist/lib/index.js",
   "types": "dist/lib/index.d.ts",
@@ -15,11 +16,11 @@
     "gts": "gts",
     "http-server": "tsc && node dist/spec/server/http_server.js",
     "jasmine": "jasmine",
+    "posttest": "npm run check",
+    "posttsc": "mv dist/lib/legacy/config.* built/lib/ && rm -rf dist/lib/legacy",
     "prepare": "npm run compile",
     "pretest": "npm run compile",
-    "pretsc": "rm -rf dist/ && rm -rf downloads/",
-    "posttest": "npm run check",
-    "posttsc": "mkdir -p built/lib && mv dist/lib/legacy/config.* built/lib/ && rm -rf dist/lib/legacy",
+    "pretsc": "rm -rf built/ dist/ downloads/ && mkdir built && cd built && mkdir lib",
     "proxy-server": "tsc && node dist/spec/server/proxy_server.js",
     "test": "tsc && npm run test-unit && npm run test-int && npm run test-proxy && npm run test-e2e",
     "test-e2e": "tsc && jasmine JASMINE_CONFIG_PATH=spec/jasmine-e2e.json",

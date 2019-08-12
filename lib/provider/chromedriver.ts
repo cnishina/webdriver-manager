@@ -5,8 +5,9 @@ import * as path from 'path';
 import {OUT_DIR, ProviderClass, ProviderConfig, ProviderInterface} from './provider';
 import {convertXmlToVersionList, updateXml} from './utils/cloud_storage_xml';
 import {changeFilePermissions, generateConfigFile, getBinaryPathFromConfig, removeFiles, renameFileWithVersion, unzipFile, zipFileList,} from './utils/file_utils';
-import {requestBinary} from './utils/http_utils';
+import {requestBinary, requestBody} from './utils/http_utils';
 import {getVersion} from './utils/version_list';
+import { Chromium } from './chromium';
 
 export class ChromeDriver extends ProviderClass implements ProviderInterface {
   cacheFileName = 'chromedriver.xml';
@@ -20,9 +21,11 @@ export class ChromeDriver extends ProviderClass implements ProviderInterface {
   seleniumFlag = '-Dwebdriver.chrome.driver';
   version: string = null;
   maxVersion: string = null;
+  chromium: Chromium;
 
   constructor(config?: ProviderConfig) {
     super();
+    this.chromium = new Chromium(config);
     this.cacheFileName = this.setVar('cacheFileName', this.cacheFileName, config);
     this.configFileName = this.setVar('configFileName', this.configFileName, config);
     this.ignoreSSL = this.setVar('ignoreSSL', this.ignoreSSL, config);
@@ -42,27 +45,61 @@ export class ChromeDriver extends ProviderClass implements ProviderInterface {
    * @param maxVersion Optional to provide the max version.
    */
   async updateBinary(version?: string, maxVersion?: string): Promise<void> {
-    if (!version) {
-      version = this.version;
+    // if (!version) {
+    //   version = this.version;
+    // }
+    // if (!maxVersion) {
+    //   maxVersion = this.maxVersion;
+    // }
+    // TODO(cnishina): still need to figure out if we want / need version and maxVersion here.
+    const downloadJson = await this.chromium.downloadAllJson();
+    for (const downloadByOs of downloadJson['all']) {
+      if (downloadByOs['os'] === this.osType.toLowerCase()) {
+        console.log('we found it!');
+        for (const downloadVersion of downloadByOs['versions']) {
+          
+          console.log(downloadVersion['channel']);
+          if (downloadVersion['channel'] === 'stable') {
+            version = downloadVersion['current_version'];
+          }
+        }
+        break;
+      }
     }
-    if (!maxVersion) {
-      maxVersion = this.maxVersion;
-    }
-    await updateXml(this.requestUrl, {
+
+    const majorVersion = version.split('.')[0];
+    const latestReleaseUrl = 
+      'https://chromedriver.storage.googleapis.com/LATEST_RELEASE_';
+    const downloadUrlVersion = `${latestReleaseUrl}${majorVersion}`;
+    const fileName = path.resolve(this.outDir, 'chromedriver_version')
+    const httpOptions = {
       fileName: path.resolve(this.outDir, this.cacheFileName),
-      ignoreSSL: this.ignoreSSL,
-      proxy: this.proxy
-    });
+      ignoreSSL: this.ignoreSSL, proxy: this.proxy };
+    let stableVersion = await requestBody(downloadUrlVersion, httpOptions);
+    fs.writeFileSync(fileName, stableVersion);
 
-    const versionList = convertXmlToVersionList(
-        path.resolve(this.outDir, this.cacheFileName), '.zip', versionParser,
-        semanticVersionParser);
-    const versionObj = getVersion(
-        versionList, osHelper(this.osType, this.osArch),
-        formatVersion(version), maxVersion);
 
-    const chromeDriverUrl = this.requestUrl + versionObj.url;
-    const chromeDriverZip = path.resolve(this.outDir, versionObj.name);
+    const osVersion = osHelper(this.osType, this.osArch);
+    const chromeDriverZip = path.resolve(
+      this.outDir, `chromedriver_${stableVersion}.zip`)
+    const chromeDriverUrl = 
+      `${this.requestUrl}${stableVersion}/chromedriver_${osVersion}.zip`
+
+    // await updateXml(this.requestUrl, {
+    //   fileName: path.resolve(this.outDir, this.cacheFileName),
+    //   ignoreSSL: this.ignoreSSL,
+    //   proxy: this.proxy
+    // });
+
+    // const versionList = convertXmlToVersionList(
+    //     path.resolve(this.outDir, this.cacheFileName), '.zip', versionParser,
+    //     semanticVersionParser);
+    // const versionObj = getVersion(
+    //     versionList, osHelper(this.osType, this.osArch),
+    //     formatVersion(version), maxVersion);
+
+    // const chromeDriverUrl = this.requestUrl + versionObj.url;
+    // const chromeDriverZip = path.resolve(this.outDir, 'versionObj.name');
 
     // We should check the zip file size if it exists. The size will
     // be used to either make the request, or quit the request if the file
@@ -84,14 +121,13 @@ export class ChromeDriver extends ProviderClass implements ProviderInterface {
     const fileList = zipFileList(chromeDriverZip);
     const fileItem = path.resolve(this.outDir, fileList[0]);
     unzipFile(chromeDriverZip, this.outDir);
-    const renamedFileName =
-        renameFileWithVersion(fileItem, '_' + versionObj.version);
-    changeFilePermissions(renamedFileName, '0755', this.osType);
+    // const renamedFileName =
+    //     renameFileWithVersion(fileItem, '_' + versionObj.version);
+    // changeFilePermissions(renamedFileName, '0755', this.osType);
 
-    generateConfigFile(
-        this.outDir, path.resolve(this.outDir, this.configFileName),
-        matchBinaries(this.osType), renamedFileName);
-    return Promise.resolve();
+    // generateConfigFile(
+    //     this.outDir, path.resolve(this.outDir, this.configFileName),
+    //     matchBinaries(this.osType), renamedFileName);
   }
 
   /**
